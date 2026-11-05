@@ -122,24 +122,29 @@ export const statsCommand = {
           `Live snapshot of the machine running **${escapeMarkdown(applicationName)}**.`,
         )
         .addFields(
+          { name: '⏱️ Bot uptime', value: `\`${formatDuration(process.uptime())}\`` },
+          { name: '🕒 Host uptime', value: `\`${formatDuration(os.uptime())}\`` },
+          { name: '📡 Gateway ping', value: `\`${ping} ms\`` },
+          { name: '⚡ CPU load', value: `${progressBar(cpu)} \`${cpu.toFixed(1)}%\`` },
           {
-            name: '⏱️ Uptime',
-            value: `Bot \`${formatDuration(process.uptime())}\` · Host \`${formatDuration(os.uptime())}\` · Ping \`${ping} ms\``,
+            name: '🧩 CPU',
+            value: `\`${threads} thread${threads === 1 ? '' : 's'}\`\n${cpuModel}`,
           },
           {
-            name: '⚡ CPU',
-            value: `${progressBar(cpu)} \`${cpu.toFixed(1)}%\` · \`${threads} thread${threads === 1 ? '' : 's'}\`\n${cpuModel}`,
+            name: '🧠 Process RAM',
+            value: `RSS \`${formatBytes(memory.rss)}\`\nHeap \`${formatBytes(memory.heapUsed)} / ${formatBytes(memory.heapTotal)}\``,
           },
           {
-            name: '🧠 Memory',
-            value: `RSS \`${formatBytes(memory.rss)}\` · Heap \`${formatBytes(memory.heapUsed)} / ${formatBytes(memory.heapTotal)}\`\nSystem ${progressBar(memoryPercent)} \`${formatBytes(usedMemory)} / ${formatBytes(totalMemory)}\``,
+            name: '🖥️ System RAM',
+            value: `${progressBar(memoryPercent)} \`${formatBytes(usedMemory)} / ${formatBytes(totalMemory)}\``,
           },
+          { name: '💻 OS', value: `\`${osLabel()}\`` },
           {
-            name: '🖥️ System',
-            value: `\`${osLabel()}\`\nNode \`${process.version}\` · discord.js \`v${discordJsVersion}\``,
+            name: '🟢 Runtime',
+            value: `Node \`${process.version}\`\ndiscord.js \`v${discordJsVersion}\``,
           },
         )
-        .setFooter({ text: os.hostname(), iconURL: avatar })
+        .setFooter({ text: `Running on ${os.hostname()}`, iconURL: avatar })
         .setTimestamp();
 
       await interaction.editReply({ embeds: [embed], allowedMentions: { parse: [] } });
