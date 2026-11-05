@@ -121,36 +121,22 @@ export const statsCommand = {
         .setDescription(
           `Live snapshot of the machine running **${escapeMarkdown(applicationName)}**.`,
         )
-     
         .addFields(
           {
-            name: '⏱️ Bot uptime',
-            value: `\`${formatDuration(process.uptime())}\``,
-            inline: true,
-          },
-          { name: '📡 Gateway ping', value: `\`${ping} ms\``, inline: true },
-          { name: '🕒 Host uptime', value: `\`${formatDuration(os.uptime())}\``, inline: true },
-          { name: '⚡ CPU load', value: `${progressBar(cpu)} \`${cpu.toFixed(1)}%\``, inline: true },
-          {
-            name: '🧠 Process RAM',
-            value: `\`${formatBytes(memory.rss)}\`\nheap \`${formatBytes(memory.heapUsed)} / ${formatBytes(memory.heapTotal)}\``,
-            inline: true,
+            name: '⏱️ Uptime',
+            value: `Bot \`${formatDuration(process.uptime())}\` · Host \`${formatDuration(os.uptime())}\` · Ping \`${ping} ms\``,
           },
           {
-            name: '🖥️ System RAM',
-            value: `${progressBar(memoryPercent)} \`${formatBytes(usedMemory)} / ${formatBytes(totalMemory)}\``,
-            inline: true,
-          },
-          { name: '💻 OS', value: `\`${osLabel()}\``, inline: true },
-          {
-            name: '🧩 CPU',
-            value: `\`${threads} thread${threads === 1 ? '' : 's'}\`\n${cpuModel}`,
-            inline: true,
+            name: '⚡ CPU',
+            value: `${progressBar(cpu)} \`${cpu.toFixed(1)}%\` · \`${threads} thread${threads === 1 ? '' : 's'}\`\n${cpuModel}`,
           },
           {
-            name: '🟢 Runtime',
-            value: `Node \`${process.version}\`\ndiscord.js \`v${discordJsVersion}\``,
-            inline: true,
+            name: '🧠 Memory',
+            value: `RSS \`${formatBytes(memory.rss)}\` · Heap \`${formatBytes(memory.heapUsed)} / ${formatBytes(memory.heapTotal)}\`\nSystem ${progressBar(memoryPercent)} \`${formatBytes(usedMemory)} / ${formatBytes(totalMemory)}\``,
+          },
+          {
+            name: '🖥️ System',
+            value: `\`${osLabel()}\`\nNode \`${process.version}\` · discord.js \`v${discordJsVersion}\``,
           },
         )
         .setFooter({ text: os.hostname(), iconURL: avatar })
