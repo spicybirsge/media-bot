@@ -2,8 +2,12 @@
 
 ## Repo status
 
-- Greenfield: empty git repo plus this file. No `package.json`, build, lint, or test setup exists yet. Do not assume scripts; create them and update this file when scaffolding.
-- Target stack: TypeScript + discord.js, Cloudflare R2 via its S3-compatible API.
+- Scaffolded: pnpm + TypeScript (ESM, `NodeNext`), discord.js and dotenv installed. Only the bot login exists so far; no watcher, slash command, or R2 code yet.
+- Stack: TypeScript + discord.js, Cloudflare R2 via its S3-compatible API.
+- Package manager is pnpm (see `packageManager` in `package.json`). Do not add npm/yarn lockfiles.
+- Scripts: `pnpm dev` (tsx watch), `pnpm build` (tsc to `dist/`), `pnpm start` (runs `dist/index.js`, used by pm2), `pnpm typecheck`.
+- Prod runs from `dist/` under pm2 with env vars supplied by pm2; `.env` is dev-only and git-ignored.
+- `pnpm-workspace.yaml` holds pnpm settings (`allowBuilds` for esbuild); pnpm 12 no longer reads the `pnpm` field in `package.json`.
 
 ## Product contract
 
