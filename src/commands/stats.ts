@@ -121,7 +121,7 @@ export const statsCommand = {
         .setDescription(
           `Live snapshot of the machine running **${escapeMarkdown(applicationName)}**.`,
         )
-        .setThumbnail(avatar)
+     
         .addFields(
           {
             name: '⏱️ Bot uptime',
