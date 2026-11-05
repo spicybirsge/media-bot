@@ -2,7 +2,7 @@
 
 ## Repo status
 
-- Scaffolded: pnpm + TypeScript (ESM, `NodeNext`), discord.js and dotenv installed. Only the bot login exists so far; no watcher, slash command, or R2 code yet.
+- Implemented: channel watcher, owner-only `/upload` (auto-registered on startup when `DISCORD_GUILD_ID` is set, plus `pnpm register`), and R2 uploads via `aws4fetch` + `nanoid`. Pure helpers live in `src/lib/`.
 - Stack: TypeScript + discord.js, Cloudflare R2 via its S3-compatible API.
 - Package manager is pnpm (see `packageManager` in `package.json`). Do not add npm/yarn lockfiles.
 - Scripts: `pnpm dev` (tsx watch), `pnpm build` (tsc to `dist/`), `pnpm start` (runs `dist/index.js`, used by pm2), `pnpm typecheck`.
