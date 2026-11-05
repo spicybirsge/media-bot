@@ -3,7 +3,6 @@ import { nanoid } from 'nanoid';
 
 import { config, MAX_UPLOAD_BYTES } from './config.js';
 import { describeError, formatBytes, UploadError } from './lib/errors.js';
-import { buildObjectKey } from './lib/filename.js';
 import { logger } from './logger.js';
 
 /**
@@ -44,7 +43,7 @@ export async function uploadToR2(input: UploadInput): Promise<StoredObject> {
     );
   }
 
-  const key = buildObjectKey(nanoid(), filename);
+  const key = nanoid();
   const target = `${config.r2.endpoint}/${encodeURIComponent(config.r2.bucket)}/${encodeURIComponent(key)}`;
 
   let response: Response;

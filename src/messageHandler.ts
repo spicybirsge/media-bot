@@ -1,4 +1,4 @@
-import { DiscordAPIError, type Attachment, type Message } from 'discord.js';
+import type { Attachment, Message } from 'discord.js';
 
 import { defaultArchiver, type ArchiveSuccess, type Archiver } from './archive.js';
 import { config } from './config.js';
@@ -9,7 +9,6 @@ import { logger } from './logger.js';
 
 /** Discord's hard message limit is 2000 characters; keep a margin. */
 const CHUNK_LIMIT = 1900;
-const UNKNOWN_MESSAGE = 10008;
 
 interface UploadFailure {
   readonly label: string;
@@ -42,49 +41,24 @@ function chunkLines(lines: readonly string[]): string[] {
   return chunks;
 }
 
-async function sendLines(message: Message, lines: readonly string[]): Promise<boolean> {
+async function sendLines(message: Message, lines: readonly string[]): Promise<void> {
   if (!message.channel.isSendable()) {
     logger.warn(`Channel ${message.channelId} is not sendable; dropping ${lines.length} result line(s).`);
-    return false;
+    return;
   }
-
-  let posted = true;
 
   for (const content of chunkLines(lines)) {
     try {
       await message.channel.send({ content, allowedMentions: { parse: [] } });
     } catch (error) {
-      posted = false;
       logger.error(`Failed to post results in channel ${message.channelId}.`, describeError(error));
     }
-  }
-
-  return posted;
-}
-
-async function deleteOriginal(message: Message): Promise<void> {
-  if (!message.deletable) {
-    logger.warn(`Message ${message.id} is not deletable; leaving it in place.`);
-    await sendLines(message, ['uploaded, but the original message could not be deleted (missing Manage Messages?).']);
-    return;
-  }
-
-  try {
-    await message.delete();
-  } catch (error) {
-    if (error instanceof DiscordAPIError && error.code === UNKNOWN_MESSAGE) {
-      // Already gone, which is the desired end state.
-      return;
-    }
-
-    logger.error(`Failed to delete message ${message.id}.`, describeError(error));
-    await sendLines(message, ['uploaded, but the original message could not be deleted (missing Manage Messages?).']);
   }
 }
 
 /**
- * Ack -> upload -> post links -> delete. The original is deleted only if every
- * item uploaded; a partial failure keeps it so nothing is lost.
+ * Ack -> upload -> post links. The original message is never deleted, so a
+ * failed post can always be retried from the channel.
  */
 export async function archiveMessage(
   message: Message,
@@ -93,7 +67,7 @@ export async function archiveMessage(
   archiver: Archiver = defaultArchiver,
 ): Promise<void> {
   try {
-    await message.reply({ content: 'upload...', allowedMentions: { repliedUser: false } });
+    await message.reply({ content: 'uploading...', allowedMentions: { repliedUser: false } });
   } catch (error) {
     logger.warn(`Could not acknowledge message ${message.id}.`, describeError(error));
   }
@@ -123,10 +97,8 @@ export async function archiveMessage(
     }
   }
 
-  let resultsPosted = true;
-
   if (uploaded.length > 0) {
-    resultsPosted = await sendLines(message, uploaded.map((entry) => entry.url));
+    await sendLines(message, uploaded.map((entry) => entry.url));
   }
 
   if (failures.length > 0) {
@@ -134,17 +106,7 @@ export async function archiveMessage(
       '**upload failed**',
       ...failures.map((failure) => `- ${failure.label}: ${failure.reason}`),
     ]);
-    return;
   }
-
-  if (uploaded.length === 0) return;
-
-  if (!resultsPosted) {
-    logger.error('Public links could not be posted; leaving the original message in place.');
-    return;
-  }
-
-  await deleteOriginal(message);
 }
 
 export async function handleMessageCreate(message: Message): Promise<void> {

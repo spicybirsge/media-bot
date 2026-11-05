@@ -1,30 +1,29 @@
 # media-bot
 
 Personal Discord bot that archives attachments and links from one private
-channel into Cloudflare R2, then replaces the message with public links.
+channel into Cloudflare R2 and posts the public links.
 
 ## Behaviour
 
 - Watches `DISCORD_CHANNEL_ID` only. Any non-bot message with attachments or
-  `http(s)` links is acknowledged with `upload...`, every item is uploaded, the
-  public links are posted, and the original message is deleted.
-- **Delete safety:** the original is deleted only when every item uploaded. If
-  anything fails, the original stays and the successful links plus the errors
-  are posted.
+  `http(s)` links is acknowledged with `uploading...`, every item is uploaded,
+  and the public links are posted.
+- The original message is never deleted or edited. If anything fails, the
+  successful links plus the errors are posted and everything stays in place.
 - `/upload` (owner only, ephemeral) takes exactly one of an attachment or a URL.
 - Links are fetched as raw bytes. An HTML page is archived as its HTML source
   (`.html`), not rendered, and the stored object keeps the response
   `Content-Type`.
-- Filenames are sanitized and every R2 key is `<nanoid>_<filename>`, so links
-  are unguessable. Public links always use `R2_PUBLIC_BASE_URL`.
+- Every R2 key is a bare 21-character nanoid, so links are short and
+  unguessable. The original filename is only used for logs and to work out the
+  content type/extension. Public links always use `R2_PUBLIC_BASE_URL`.
 
 ## Requirements
 
 - Node 22+ and pnpm 12 (see `packageManager` in `package.json`).
 - A Discord application/bot with the **Message Content** intent enabled, and
-  `View Channel`, `Send Messages`, `Manage Messages`, and
-  `Use Application Commands` in the archive channel. The bot needs Manage
-  Messages to delete the originals.
+  `View Channel`, `Send Messages`, and `Use Application Commands` in the
+  archive channel.
 - An R2 bucket with a public custom domain (or `r2.dev` URL) and an API token
   with **Object Read & Write** for that bucket. Server-side uploads do not need
   CORS.

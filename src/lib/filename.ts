@@ -94,8 +94,3 @@ export function filenameFromUrl(rawUrl: string): string {
 export function contentTypeForFilename(name: string): string {
   return contentTypeForExtension(extensionOf(name));
 }
-
-/** `${id}_${sanitizedFilename}` so every link is unguessable. */
-export function buildObjectKey(id: string, filename: string): string {
-  return `${id}_${sanitizeFilename(filename)}`;
-}

@@ -16,9 +16,9 @@ Personal Discord bot that archives files and links from one private channel into
 ### Channel watcher
 
 - Watch only `DISCORD_CHANNEL_ID`.
-- On any non-bot message containing attachment(s) or `http(s)` link(s): reply `upload...` immediately, upload each attachment and fetched link, post the resulting public link(s), then delete the original message.
-- Order matters: ack -> upload -> post links -> delete. Never delete before upload succeeds; on failure leave the original message and surface the error.
-- Needs the Message Content intent (otherwise `message.content` is empty) and Manage Messages.
+- On any non-bot message containing attachment(s) or `http(s)` link(s): reply `uploading...` immediately, upload each attachment and fetched link, then post the resulting public link(s). The original message is never deleted or edited.
+- Order matters: ack -> upload -> post links. On failure, post the successful links and the errors; nothing is deleted.
+- Needs the Message Content intent (otherwise `message.content` is empty).
 
 ### Owner slash command
 
@@ -28,9 +28,9 @@ Personal Discord bot that archives files and links from one private channel into
 
 ## R2 object naming
 
-- Key format: `${nanoid}_${sanitizedFilename}` with the extension preserved, e.g. `V1StGXR8_Z5jdHi6B-myT_clip.mp4`.
+- Key format: the bare `${nanoid}` (21 characters), e.g. `V1StGXR8_Z5jdHi6B-myT`. Filenames are not part of keys, so links stay short.
 - Never key objects by original filename alone; links must be unguessable.
-- Sanitize filenames: strip directory separators / path traversal, control characters, and characters unsafe in URLs; cap length. If there is no filename (plain URL), derive one from the URL path, else from content type; keep the extension.
+- Filenames are only used for logs and to derive content type/extension; sanitize them (strip directory separators / path traversal, control characters, and characters unsafe in URLs; cap length) before logging or using them to pick a content type.
 - Public links must use `R2_PUBLIC_BASE_URL`; never return the S3 API endpoint or presigned URLs.
 - Discord attachment URLs are signed and expire, so fetch them immediately.
 
