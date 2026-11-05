@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 
 import { config, MAX_UPLOAD_BYTES } from './config.js';
 import { describeError, formatBytes, UploadError } from './lib/errors.js';
+import { contentDisposition } from './lib/filename.js';
 import { logger } from './logger.js';
 
 /**
@@ -50,7 +51,10 @@ export async function uploadToR2(input: UploadInput): Promise<StoredObject> {
   try {
     response = await client.fetch(target, {
       method: 'PUT',
-      headers: { 'content-type': contentType },
+      headers: {
+        'content-type': contentType,
+        'content-disposition': contentDisposition(filename),
+      },
       body: data,
     });
   } catch (error) {

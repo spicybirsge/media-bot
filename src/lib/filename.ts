@@ -94,3 +94,33 @@ export function filenameFromUrl(rawUrl: string): string {
 export function contentTypeForFilename(name: string): string {
   return contentTypeForExtension(extensionOf(name));
 }
+
+const NON_ASCII = /[^\x20-\x7e]+/g;
+
+function encodeRfc5987(value: string): string {
+  return encodeURIComponent(value).replace(
+    /['()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
+/**
+ * Keeps the original filename on the stored object even though the URL only
+ * contains a nanoid, so downloads still get a sensible name. `filename*`
+ * carries the exact name; the quoted `filename` is an ASCII fallback.
+ */
+export function contentDisposition(rawFilename: string): string {
+  const filename = sanitizeFilename(rawFilename, 'file');
+  const { extension } = splitExtension(filename);
+  const extensionSuffix = extension ? `.${extension}` : '';
+
+  const ascii = filename
+    .replace(NON_ASCII, '_')
+    .replace(/_+/g, '_')
+    .replace(/^[._\-\s]+|[._\-\s]+$/g, '');
+
+  const fallback = !ascii || ascii === extension ? `file${extensionSuffix}` : ascii;
+  const escaped = fallback.replace(/["\\]/g, '_');
+
+  return `inline; filename="${escaped}"; filename*=UTF-8''${encodeRfc5987(filename)}`;
+}

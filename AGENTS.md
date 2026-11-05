@@ -30,7 +30,8 @@ Personal Discord bot that archives files and links from one private channel into
 
 - Key format: the bare `${nanoid}` (21 characters), e.g. `V1StGXR8_Z5jdHi6B-myT`. Filenames are not part of keys, so links stay short.
 - Never key objects by original filename alone; links must be unguessable.
-- Filenames are only used for logs and to derive content type/extension; sanitize them (strip directory separators / path traversal, control characters, and characters unsafe in URLs; cap length) before logging or using them to pick a content type.
+- Filenames are only used for logs, content type/extension, and object metadata; sanitize them (strip directory separators / path traversal, control characters, and characters unsafe in URLs; cap length) before using them.
+- Store the sanitized name as `Content-Disposition: inline; filename=...` so downloads keep a sensible name even though keys are bare nanoids.
 - Public links must use `R2_PUBLIC_BASE_URL`; never return the S3 API endpoint or presigned URLs.
 - Discord attachment URLs are signed and expire, so fetch them immediately.
 

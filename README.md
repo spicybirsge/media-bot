@@ -15,8 +15,9 @@ channel into Cloudflare R2 and posts the public links.
   (`.html`), not rendered, and the stored object keeps the response
   `Content-Type`.
 - Every R2 key is a bare 21-character nanoid, so links are short and
-  unguessable. The original filename is only used for logs and to work out the
-  content type/extension. Public links always use `R2_PUBLIC_BASE_URL`.
+  unguessable. The content type and a `Content-Disposition` filename are stored
+  on the object, so it still renders and saves with the real name. Public links
+  always use `R2_PUBLIC_BASE_URL`.
 
 ## Requirements
 
