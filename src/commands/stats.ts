@@ -4,6 +4,7 @@ import os from 'node:os';
 import {
   EmbedBuilder,
   SlashCommandBuilder,
+  escapeMarkdown,
   version as discordJsVersion,
   type ChatInputCommandInteraction,
 } from 'discord.js';
@@ -110,12 +111,16 @@ export const statsCommand = {
       const threads = cpus.length;
       const cpuModel = (cpus[0]?.model ?? 'Unknown CPU').replace(/\s+/g, ' ').trim();
       const avatar = interaction.client.user.displayAvatarURL({ size: 128 });
-      const ping = Math.max(0, Math.round(interaction.client.ws.ping));
+      const ping = interaction.client.ws.ping;
+      const applicationName =
+        interaction.client.application?.name ?? interaction.client.user.username;
 
       const embed = new EmbedBuilder()
         .setColor(colorForLoad(Math.max(cpu, memoryPercent)))
         .setTitle('📊 System Statistics')
-        .setDescription('Live snapshot of the machine running **media-bot**.')
+        .setDescription(
+          `Live snapshot of the machine running **${escapeMarkdown(applicationName)}**.`,
+        )
         .setThumbnail(avatar)
         .addFields(
           {
