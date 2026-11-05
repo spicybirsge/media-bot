@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+*.tsbuildinfo
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# pm2
+.pm2/
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
