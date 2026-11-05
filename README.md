@@ -1,0 +1,69 @@
+# media-bot
+
+Personal Discord bot that archives attachments and links from one private
+channel into Cloudflare R2 and posts the public links.
+
+## Behaviour
+
+- Watches `DISCORD_CHANNEL_ID` only. Any non-bot message with attachments or
+  `http(s)` links is acknowledged with `uploading...`, every item is uploaded,
+  and the public links are posted.
+- The original message is never deleted or edited. If anything fails, the
+  successful links plus the errors are posted and everything stays in place.
+- `/upload` (owner only, ephemeral) takes exactly one of an attachment or a URL.
+- `/stats` is public and shows bot uptime, gateway ping, CPU load, process and
+  system RAM, OS, CPU model, and runtime versions as a colour-coded embed.
+- Links are fetched as raw bytes. An HTML page is archived as its HTML source
+  (`.html`), not rendered, and the stored object keeps the response
+  `Content-Type`.
+- Every R2 key is a bare 21-character nanoid, so links are short and
+  unguessable. The content type and a `Content-Disposition` filename are stored
+  on the object, so it still renders and saves with the real name. Public links
+  always use `R2_PUBLIC_BASE_URL`.
+
+## Requirements
+
+- Node 22+ and pnpm 12 (see `packageManager` in `package.json`).
+- A Discord application/bot with the **Message Content** intent enabled, and
+  `View Channel`, `Send Messages`, and `Use Application Commands` in the
+  archive channel.
+- An R2 bucket with a public custom domain (or `r2.dev` URL) and an API token
+  with **Object Read & Write** for that bucket. Server-side uploads do not need
+  CORS.
+
+## Setup
+
+```sh
+cp .env.example .env   # fill in the values
+pnpm install
+pnpm register          # guild-scoped, so command changes appear immediately
+pnpm dev               # or: pnpm build && pnpm start
+```
+
+If `DISCORD_GUILD_ID` is set, `/upload` is also registered automatically on
+startup, so deploys pick up command changes without a manual step. Commands are
+never registered globally.
+
+## Scripts
+
+| Script | What it does |
+| --- | --- |
+| `pnpm dev` | Run from source with `tsx watch`. |
+| `pnpm build` | Compile to `dist/`. |
+| `pnpm start` | Run `dist/index.js` (used by pm2). |
+| `pnpm register` | Register `/upload` from source. |
+| `pnpm register:dist` | Register `/upload` from the build (prod). |
+| `pnpm typecheck` | Type-check without emitting. |
+
+For pm2, run `pnpm build` and point pm2 at `dist/index.js` with the environment
+variables supplied by pm2; `.env` is dev-only.
+
+## Limits and failure handling
+
+- Each file is buffered in memory before upload. `MAX_BUFFER_BYTES` in
+  `src/config.ts` is a 256 MiB heap guard (higher than any Discord attachment
+  cap); raise it if a huge link must be archived. Failures are reported in the
+  channel instead of crashing the bot.
+- Fetches time out after 5 minutes and non-2xx responses are reported by status
+  and host/path — signed query strings are never echoed to chat or logs.
+- Uploads are processed one at a time in message order.
