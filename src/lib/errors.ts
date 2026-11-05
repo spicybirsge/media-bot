@@ -20,19 +20,3 @@ export function describeError(error: unknown, maxLength = 300): string {
 
   return singleLine.length > maxLength ? `${singleLine.slice(0, maxLength - 1)}…` : singleLine;
 }
-
-export function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes < 0) return 'unknown size';
-  if (bytes < 1024) return `${bytes} B`;
-
-  const units = ['KiB', 'MiB', 'GiB', 'TiB'];
-  let value = bytes / 1024;
-  let unit = 0;
-
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-
-  return `${value.toFixed(1)} ${units[unit]}`;
-}

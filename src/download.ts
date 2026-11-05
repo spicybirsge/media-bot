@@ -1,7 +1,8 @@
 import type { Attachment } from 'discord.js';
 
 import { FETCH_TIMEOUT_MS, MAX_BUFFER_BYTES } from './config.js';
-import { describeError, formatBytes, UploadError } from './lib/errors.js';
+import { describeError, UploadError } from './lib/errors.js';
+import { formatBytes } from './lib/format.js';
 import {
   contentTypeForFilename,
   ensureExtension,

@@ -1,6 +1,6 @@
 import { Client, Events, GatewayIntentBits } from 'discord.js';
 
-import { uploadCommand } from './commands/upload.js';
+import { commandMap } from './commands/index.js';
 import { config } from './config.js';
 import { describeError } from './lib/errors.js';
 import { logger } from './logger.js';
@@ -38,10 +38,12 @@ client.on(Events.MessageCreate, (message) => {
 
 client.on(Events.InteractionCreate, (interaction) => {
   if (!interaction.isChatInputCommand()) return;
-  if (interaction.commandName !== uploadCommand.data.name) return;
 
-  uploadCommand.execute(interaction).catch((error: unknown) => {
-    logger.error('Unhandled error in /upload.', describeError(error));
+  const command = commandMap.get(interaction.commandName);
+  if (!command) return;
+
+  command.execute(interaction).catch((error: unknown) => {
+    logger.error(`Unhandled error in /${interaction.commandName}.`, describeError(error));
   });
 });
 

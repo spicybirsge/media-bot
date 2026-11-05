@@ -1,7 +1,7 @@
 import { REST } from 'discord.js';
 import { pathToFileURL } from 'node:url';
 
-import { uploadCommand } from './commands/upload.js';
+import { commands } from './commands/index.js';
 import { config } from './config.js';
 import { describeError } from './lib/errors.js';
 import { logger } from './logger.js';
@@ -22,11 +22,13 @@ export async function registerGuildCommands(applicationId: string): Promise<void
   }
 
   const rest = new REST({ version: REST_VERSION }).setToken(config.discordToken);
-  const body = [uploadCommand.data.toJSON()];
+  const body = commands.map((command) => command.data.toJSON());
   const registered: unknown = await rest.put(guildCommandsRoute(applicationId, guildId), { body });
-  const count = Array.isArray(registered) ? registered.length : 1;
+  const count = Array.isArray(registered) ? registered.length : commands.length;
 
-  logger.info(`Registered /${uploadCommand.data.name} in guild ${guildId} (${count} command(s)).`);
+  logger.info(
+    `Registered ${commands.map((command) => `/${command.data.name}`).join(', ')} in guild ${guildId} (${count} command(s)).`,
+  );
 }
 
 async function main(): Promise<void> {

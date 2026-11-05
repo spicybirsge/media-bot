@@ -2,8 +2,9 @@ import { AwsClient } from 'aws4fetch';
 import { nanoid } from 'nanoid';
 
 import { config, MAX_UPLOAD_BYTES } from './config.js';
-import { describeError, formatBytes, UploadError } from './lib/errors.js';
+import { describeError, UploadError } from './lib/errors.js';
 import { contentDisposition } from './lib/filename.js';
+import { formatBytes } from './lib/format.js';
 import { logger } from './logger.js';
 
 /**

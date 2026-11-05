@@ -11,6 +11,8 @@ channel into Cloudflare R2 and posts the public links.
 - The original message is never deleted or edited. If anything fails, the
   successful links plus the errors are posted and everything stays in place.
 - `/upload` (owner only, ephemeral) takes exactly one of an attachment or a URL.
+- `/stats` is public and shows bot uptime, gateway ping, CPU load, process and
+  system RAM, OS, CPU model, and runtime versions as a colour-coded embed.
 - Links are fetched as raw bytes. An HTML page is archived as its HTML source
   (`.html`), not rendered, and the stored object keeps the response
   `Content-Type`.

@@ -2,7 +2,7 @@
 
 ## Repo status
 
-- Implemented: channel watcher, owner-only `/upload` (auto-registered on startup when `DISCORD_GUILD_ID` is set, plus `pnpm register`), and R2 uploads via `aws4fetch` + `nanoid`. Pure helpers live in `src/lib/`.
+- Implemented: channel watcher, owner-only `/upload` (auto-registered on startup when `DISCORD_GUILD_ID` is set, plus `pnpm register`), public `/stats`, and R2 uploads via `aws4fetch` + `nanoid`. Pure helpers live in `src/lib/`.
 - Stack: TypeScript + discord.js, Cloudflare R2 via its S3-compatible API.
 - Package manager is pnpm (see `packageManager` in `package.json`). Do not add npm/yarn lockfiles.
 - Scripts: `pnpm dev` (tsx watch), `pnpm build` (tsc to `dist/`), `pnpm start` (runs `dist/index.js`, used by pm2), `pnpm typecheck`.
@@ -25,6 +25,11 @@ Personal Discord bot that archives files and links from one private channel into
 - Accepts one attachment or one `http(s)` URL, uploads it to R2, returns the public link.
 - Restrict to `OWNER_ID` with an explicit user-ID check in code. `setDefaultMemberPermissions` alone is not enough because server admins bypass it.
 - Register guild-scoped so command updates appear immediately.
+
+### Public slash command
+
+- `/stats` is available to any member of the guild (no owner check) and reports read-only host/runtime stats: bot and host uptime, gateway ping, CPU load, process/system RAM, OS, CPU model, and Node/discord.js versions.
+- Never expose env values, tokens, signed URLs, or other secrets in it.
 
 ## R2 object naming
 
