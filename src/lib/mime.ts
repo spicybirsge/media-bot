@@ -67,6 +67,8 @@ const MIME_TO_EXTENSION: Readonly<Record<string, string>> = {
   'video/ogg': 'ogv',
   'video/quicktime': 'mov',
   'video/webm': 'webm',
+  'video/x-flv': 'flv',
+  'video/x-m4v': 'm4v',
   'video/x-matroska': 'mkv',
   'video/x-msvideo': 'avi',
 };

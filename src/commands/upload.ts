@@ -6,9 +6,17 @@ import {
 } from 'discord.js';
 
 import { archiveAttachment, archiveLink, type ArchiveSuccess } from '../archive.js';
-import { config } from '../config.js';
+import { config, SLASH_UPLOAD_TIMEOUT_MS } from '../config.js';
 import { describeError } from '../lib/errors.js';
 import { logger } from '../logger.js';
+
+interface UploadDependencies {
+  readonly archiveAttachment: typeof archiveAttachment;
+  readonly archiveLink: typeof archiveLink;
+  readonly timeoutMs: number;
+}
+
+const defaultDependencies: UploadDependencies = { archiveAttachment, archiveLink, timeoutMs: SLASH_UPLOAD_TIMEOUT_MS };
 
 async function replyEphemeral(interaction: ChatInputCommandInteraction, content: string): Promise<void> {
   try {
@@ -33,7 +41,7 @@ export const uploadCommand = {
         .setMaxLength(2000),
     ),
 
-  async execute(interaction: ChatInputCommandInteraction): Promise<void> {
+  async execute(interaction: ChatInputCommandInteraction, deps: UploadDependencies = defaultDependencies): Promise<void> {
     if (interaction.user.id !== config.ownerId) {
       await replyEphemeral(interaction, 'Not authorized.');
       return;
@@ -52,10 +60,6 @@ export const uploadCommand = {
       return;
     }
 
-    const job: () => Promise<ArchiveSuccess> = file
-      ? () => archiveAttachment(file)
-      : () => archiveLink(url);
-
     try {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     } catch (error) {
@@ -63,11 +67,17 @@ export const uploadCommand = {
       return;
     }
 
+    // Include queue wait, download and upload in one deadline, leaving room to
+    // reply before the original interaction token expires at 15 minutes.
+    const elapsed = Math.max(0, Date.now() - interaction.createdTimestamp);
+    const signal = AbortSignal.timeout(Math.max(1, deps.timeoutMs - elapsed));
+    let result: ArchiveSuccess;
     try {
-      const result = await job();
-      await interaction.editReply({ content: result.url, allowedMentions: { parse: [] } });
+      result = file ? await deps.archiveAttachment(file, signal) : await deps.archiveLink(url, signal);
     } catch (error) {
-      const reason = describeError(error);
+      const reason = signal.aborted
+        ? '/upload timed out. Use the archive channel for files that need longer to download or upload.'
+        : describeError(error);
       logger.error('/upload failed.', reason);
 
       await interaction
@@ -75,6 +85,13 @@ export const uploadCommand = {
         .catch((replyError: unknown) => {
           logger.warn('Failed to report /upload failure.', describeError(replyError));
         });
+      return;
+    }
+
+    try {
+      await interaction.editReply({ content: result.url, allowedMentions: { parse: [] } });
+    } catch (error) {
+      logger.error('Could not deliver the /upload result.', { url: result.url, error });
     }
   },
 };

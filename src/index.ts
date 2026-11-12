@@ -6,6 +6,10 @@ import { describeError } from './lib/errors.js';
 import { logger } from './logger.js';
 import { handleMessageCreate } from './messageHandler.js';
 import { registerGuildCommands } from './registerCommands.js';
+import { checkSocialTools } from './socialDownload.js';
+import { handleSocialMessage } from './socialMessageHandler.js';
+import { stopSocialProcesses } from './socialProcess.js';
+import { archiveLifecycle } from './lib/lifecycle.js';
 
 const client = new Client({
   intents: [
@@ -18,10 +22,12 @@ const client = new Client({
 
 client.once(Events.ClientReady, (ready) => {
   logger.info(`Logged in as ${ready.user.tag} (${ready.user.id}).`);
-  logger.info(`Watching channel ${config.channelId}.`);
+  if (config.socialChannelId) {
+    void checkSocialTools().catch(() => logger.warn('Could not check social video tools.'));
+  }
 
   if (!config.guildId) {
-    logger.warn('DISCORD_GUILD_ID is not set; run `pnpm register` to publish /upload.');
+    logger.warn('DISCORD_GUILD_ID is not set; skipping slash-command registration.');
     return;
   }
 
@@ -31,12 +37,15 @@ client.once(Events.ClientReady, (ready) => {
 });
 
 client.on(Events.MessageCreate, (message) => {
-  handleMessageCreate(message).catch((error: unknown) => {
+  if (archiveLifecycle.signal.aborted) return;
+  const handler = message.channelId === config.socialChannelId ? handleSocialMessage : handleMessageCreate;
+  handler(message).catch((error: unknown) => {
     logger.error('Unhandled error in the channel watcher.', describeError(error));
   });
 });
 
 client.on(Events.InteractionCreate, (interaction) => {
+  if (archiveLifecycle.signal.aborted) return;
   if (!interaction.isChatInputCommand()) return;
 
   const command = commandMap.get(interaction.commandName);
@@ -51,10 +60,6 @@ client.on(Events.Error, (error) => {
   logger.error('Discord client error.', describeError(error));
 });
 
-client.on(Events.Warn, (message) => {
-  logger.warn(`Discord client warning: ${message}`);
-});
-
 process.on('unhandledRejection', (reason) => {
   logger.error('Unhandled promise rejection.', describeError(reason));
 });
@@ -66,8 +71,9 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     if (shuttingDown) return;
     shuttingDown = true;
 
-    logger.info(`Received ${signal}; shutting down.`);
-    void client.destroy().finally(() => process.exit(0));
+    void archiveLifecycle.shutdown(stopSocialProcesses)
+      .catch((error: unknown) => logger.error('Archive shutdown failed.', error))
+      .finally(() => client.destroy()).finally(() => process.exit(0));
   });
 }
 

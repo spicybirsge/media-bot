@@ -5,40 +5,12 @@ import { config } from './config.js';
 import { displayUrl } from './download.js';
 import { describeError } from './lib/errors.js';
 import { extractUrls } from './lib/links.js';
+import { chunkLines } from './lib/messageChunks.js';
 import { logger } from './logger.js';
-
-/** Discord's hard message limit is 2000 characters; keep a margin. */
-const CHUNK_LIMIT = 1900;
 
 interface UploadFailure {
   readonly label: string;
   readonly reason: string;
-}
-
-function chunkLines(lines: readonly string[]): string[] {
-  const chunks: string[] = [];
-  let current = '';
-
-  for (const line of lines) {
-    if (!line) continue;
-
-    if (!current) {
-      current = line;
-      continue;
-    }
-
-    if (current.length + 1 + line.length > CHUNK_LIMIT) {
-      chunks.push(current);
-      current = line;
-      continue;
-    }
-
-    current += `\n${line}`;
-  }
-
-  if (current) chunks.push(current);
-
-  return chunks;
 }
 
 async function sendLines(message: Message, lines: readonly string[]): Promise<void> {

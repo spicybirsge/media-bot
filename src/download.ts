@@ -1,6 +1,9 @@
 import type { Attachment } from 'discord.js';
+import { mkdtemp, open } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-import { FETCH_TIMEOUT_MS, MAX_BUFFER_BYTES } from './config.js';
+import { FETCH_TIMEOUT_MS, MAX_UPLOAD_BYTES } from './config.js';
 import { describeError, UploadError } from './lib/errors.js';
 import { formatBytes } from './lib/format.js';
 import {
@@ -10,13 +13,16 @@ import {
   hasExtension,
 } from './lib/filename.js';
 import { normalizeContentType } from './lib/mime.js';
+import { removeTempDirectory } from './lib/tempFiles.js';
+import { archiveLifecycle } from './lib/lifecycle.js';
 
 const USER_AGENT = 'media-bot/1.0 (Discord archiver)';
 
 export interface DownloadedFile {
   readonly filename: string;
   readonly contentType: string;
-  readonly data: Uint8Array;
+  readonly path: string;
+  readonly cleanup: () => Promise<void>;
 }
 
 function parseHttpUrl(raw: string): URL {
@@ -66,47 +72,51 @@ function resolveContentType(
   return specific ?? contentTypeForFilename(filename);
 }
 
-async function readBody(response: Response, label: string): Promise<Uint8Array> {
+async function saveBody(response: Response, path: string, label: string): Promise<Uint8Array> {
   const reader = response.body?.getReader();
-  if (!reader) return new Uint8Array(0);
-
-  const chunks: Uint8Array[] = [];
+  if (!reader) throw new UploadError(`${label}: empty response`);
+  const file = await open(path, 'wx').catch(async (error: unknown) => {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+    throw error;
+  });
   let total = 0;
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (!value || value.byteLength === 0) continue;
-
-    total += value.byteLength;
-    if (total > MAX_BUFFER_BYTES) {
-      await reader.cancel().catch(() => undefined);
-      throw new UploadError(
-        `${label}: response is larger than the ${formatBytes(MAX_BUFFER_BYTES)} in-memory limit`,
-      );
+  let head: Uint8Array = new Uint8Array(0);
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value?.byteLength) continue;
+      total += value.byteLength;
+      if (total > MAX_UPLOAD_BYTES) throw new UploadError(`${label}: response exceeds the ${formatBytes(MAX_UPLOAD_BYTES)} upload limit`);
+      // Keep only a small header for MIME/extension sniffing; persist the rest to disk.
+      if (head.byteLength < 512) head = Buffer.concat([head, value.subarray(0, 512 - head.byteLength)]);
+      await file.writeFile(value);
     }
-
-    chunks.push(value);
+    if (!total) throw new UploadError(`${label}: empty response`);
+    return head;
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    throw error;
+  } finally {
+    reader.releaseLock();
+    await file.close();
   }
-
-  const merged = new Uint8Array(total);
-  let offset = 0;
-
-  for (const chunk of chunks) {
-    merged.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-
-  return merged;
 }
 
-interface FetchedBytes {
-  readonly data: Uint8Array;
+interface FetchedFile {
+  readonly head: Uint8Array;
+  readonly path: string;
+  readonly cleanup: () => Promise<void>;
   readonly contentType: string;
   readonly finalUrl: string;
 }
 
-async function fetchBytes(target: string, label: string): Promise<FetchedBytes> {
+async function fetchFile(target: string, label: string, signal?: AbortSignal): Promise<FetchedFile> {
+  const combined = AbortSignal.any([
+    archiveLifecycle.signal, AbortSignal.timeout(FETCH_TIMEOUT_MS), ...(signal ? [signal] : []),
+  ]);
+  combined.throwIfAborted();
   let response: Response;
 
   try {
@@ -116,7 +126,7 @@ async function fetchBytes(target: string, label: string): Promise<FetchedBytes> 
         'user-agent': USER_AGENT,
         accept: '*/*',
       },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      signal: combined,
     });
   } catch (error) {
     if (error instanceof Error && error.name === 'TimeoutError') {
@@ -133,49 +143,57 @@ async function fetchBytes(target: string, label: string): Promise<FetchedBytes> 
   }
 
   const declaredLength = Number(response.headers.get('content-length') ?? '');
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_BUFFER_BYTES) {
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_UPLOAD_BYTES) {
     if (response.body) void response.body.cancel().catch(() => undefined);
     throw new UploadError(
-      `${label}: ${formatBytes(declaredLength)} exceeds the ${formatBytes(MAX_BUFFER_BYTES)} in-memory limit`,
+      `${label}: ${formatBytes(declaredLength)} exceeds the ${formatBytes(MAX_UPLOAD_BYTES)} upload limit`,
     );
   }
 
-  let data: Uint8Array;
+  const directory = await mkdtemp(join(tmpdir(), 'media-bot-download-')).catch(async (error: unknown) => {
+    await response.body?.cancel().catch(() => undefined);
+    throw error;
+  });
+  const path = join(directory, 'download');
+  const cleanup = () => removeTempDirectory(directory);
+  let head: Uint8Array;
   try {
-    data = await readBody(response, label);
+    head = await saveBody(response, path, label);
   } catch (error) {
+    await cleanup();
     if (error instanceof UploadError) throw error;
     throw new UploadError(`${label}: download failed (${describeError(error)})`);
   }
 
   return {
-    data,
+    head, path, cleanup,
     contentType: normalizeContentType(response.headers.get('content-type')),
     finalUrl: response.url || target,
   };
 }
 
 /** Fetches a Discord attachment immediately: its CDN URL is signed and expires. */
-export async function downloadAttachment(attachment: Attachment): Promise<DownloadedFile> {
+export async function downloadAttachment(attachment: Attachment, signal?: AbortSignal): Promise<DownloadedFile> {
   const label = attachment.name || 'attachment';
 
-  if (attachment.size > MAX_BUFFER_BYTES) {
+  if (attachment.size > MAX_UPLOAD_BYTES) {
     throw new UploadError(
-      `${label}: ${formatBytes(attachment.size)} exceeds the ${formatBytes(MAX_BUFFER_BYTES)} in-memory limit`,
+      `${label}: ${formatBytes(attachment.size)} exceeds the ${formatBytes(MAX_UPLOAD_BYTES)} upload limit`,
     );
   }
 
-  const fetched = await fetchBytes(attachment.url, label);
+  const fetched = await fetchFile(attachment.url, label, signal);
   const filename = ensureExtension(
     attachment.name,
     attachment.contentType ?? fetched.contentType,
-    fetched.data,
+    fetched.head,
   );
 
   return {
     filename,
     contentType: resolveContentType([attachment.contentType, fetched.contentType], filename),
-    data: fetched.data,
+    path: fetched.path,
+    cleanup: fetched.cleanup,
   };
 }
 
@@ -184,14 +202,10 @@ export async function downloadAttachment(attachment: Attachment): Promise<Downlo
  * being rendered, and the filename comes from the URL path, the post-redirect
  * URL, or the response content type.
  */
-export async function downloadLink(rawUrl: string): Promise<DownloadedFile> {
+export async function downloadLink(rawUrl: string, signal?: AbortSignal): Promise<DownloadedFile> {
   const url = parseHttpUrl(rawUrl);
   const label = displayUrl(url.href);
-  const fetched = await fetchBytes(url.href, label);
-
-  if (fetched.data.byteLength === 0) {
-    throw new UploadError(`${label}: empty response`);
-  }
+  const fetched = await fetchFile(url.href, label, signal);
 
   const originalName = filenameFromUrl(url.href);
   const redirectedName = filenameFromUrl(fetched.finalUrl);
@@ -201,11 +215,12 @@ export async function downloadLink(rawUrl: string): Promise<DownloadedFile> {
       ? redirectedName
       : originalName || redirectedName || 'download';
 
-  const filename = ensureExtension(baseName, fetched.contentType, fetched.data);
+  const filename = ensureExtension(baseName, fetched.contentType, fetched.head);
 
   return {
     filename,
     contentType: resolveContentType([fetched.contentType], filename),
-    data: fetched.data,
+    path: fetched.path,
+    cleanup: fetched.cleanup,
   };
 }
