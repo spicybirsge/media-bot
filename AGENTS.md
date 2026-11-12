@@ -3,6 +3,10 @@
 ## Repo status
 
 - Implemented: channel watcher, owner-only `/upload` (auto-registered on startup when `DISCORD_GUILD_ID` is set, plus `pnpm register`), public `/stats`, and R2 uploads via `aws4fetch` + `nanoid`. Pure helpers live in `src/lib/`.
+- Optional social video watcher: `DISCORD_SOCIAL_ID`, with host yt-dlp/FFmpeg/ffprobe (no npm wrappers).
+- Console logging confirms login and successful slash-command registration at startup (and warns when guild registration is unconfigured). Per-link downloads, conversions and successful uploads are silent. Preserve full diagnostics on actual failures; ordinary tool warnings on successful jobs are silent.
+- Uploads are capped at 1 GiB per file. Download attachments/URLs to disk; upload staged files with sequential 16 MiB multipart requests above 16 MiB, and abort incomplete multipart uploads on failure. All R2 uploads share a serial queue to bound memory.
+- Archive jobs are tracked by `archiveLifecycle`; SIGINT/SIGTERM cancel queued/active work and await process, multipart and temporary-file cleanup before exiting. PM2 should allow a 45-second kill timeout.
 - Stack: TypeScript + discord.js, Cloudflare R2 via its S3-compatible API.
 - Package manager is pnpm (see `packageManager` in `package.json`). Do not add npm/yarn lockfiles.
 - Scripts: `pnpm dev` (tsx watch), `pnpm build` (tsc to `dist/`), `pnpm start` (runs `dist/index.js`, used by pm2), `pnpm typecheck`.
@@ -20,10 +24,21 @@ Personal Discord bot that archives files and links from one private channel into
 - Order matters: ack -> upload -> post links. On failure, post the successful links and the errors; nothing is deleted.
 - Needs the Message Content intent (otherwise `message.content` is empty).
 
+### Social video watcher
+
+- `DISCORD_SOCIAL_ID` is optional and must differ from `DISCORD_CHANNEL_ID`.
+- Ignore bots and messages without URLs. Validate individual YouTube, Instagram and X video/post URLs; reject other sites and profile/home/playlist-only links.
+- Ack before downloading. Serialize social jobs, download all available videos per post, skip photos, inspect expected audio, and upload each video separately with existing R2 naming rules.
+- Final social uploads must be MP4 (`video/mp4`) with H.264/yuv420p video and AAC audio when present. Remux compatible streams with faststart; transcode only incompatible streams and validate the finished MP4 before upload.
+- Preserve partial successes and report invalid-link counts, no-video posts, and download/upload errors. Keep raw downloader diagnostics out of Discord replies; console diagnostics are unredacted per the owner's explicit preference.
+- Use host executables via argument arrays with no shell. Optional `YT_DLP_PATH`, `FFMPEG_PATH`, `FFPROBE_PATH` and `SOCIAL_COOKIES_FILE` configure full executable/cookie paths.
+- Enforce the 1 GiB per-file limit, a 4 GiB temporary budget per social post, 30-minute download/MP4/upload timeouts and 30-second probes; remove temporary files after each job.
+
 ### Owner slash command
 
 - Accepts one attachment or one `http(s)` URL, uploads it to R2, returns the public link.
 - Restrict to `OWNER_ID` with an explicit user-ID check in code. `setDefaultMemberPermissions` alone is not enough because server admins bypass it.
+- Enforce a 12-minute overall deadline, including queue wait, so an ephemeral timeout/error can be delivered before Discord's 15-minute interaction token expiry. Channel jobs keep their longer budgets.
 - Register guild-scoped so command updates appear immediately.
 
 ### Public slash command
@@ -57,7 +72,7 @@ R2_PUBLIC_BASE_URL
 
 Optional: `DISCORD_GUILD_ID` for guild-scoped command registration.
 
-- Commit `.env.example`, never `.env`. Do not log tokens, keys, or signed URLs.
+- Commit `.env.example`, never `.env`. Do not deliberately log env credentials. Exception requested by the owner: social download failures and upload exceptions are logged in full to the console without redaction, including any URLs in those diagnostics; Discord replies still use concise messages.
 
 ## Guardrails
 
@@ -78,4 +93,4 @@ Keep key building, filename sanitization, and URL extraction as pure functions s
 
 ## Testing
 
-No test setup yet. When added, cover key/filename sanitization, link extraction, and owner gating with mocks; unit tests should not require live Discord or R2 access.
+`pnpm test` runs Node tests through tsx with fake environment credentials. Cover key/filename sanitization, link extraction/validation, owner gating, social partial results, audio checks, queues, subprocess limits and cleanup. Tests must not require live Discord or R2 access.
