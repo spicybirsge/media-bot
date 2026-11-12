@@ -17,17 +17,14 @@ export async function registerGuildCommands(applicationId: string): Promise<void
   const guildId = config.guildId;
 
   if (!guildId) {
-    logger.warn('DISCORD_GUILD_ID is not set; skipping guild command registration.');
     return;
   }
 
   const rest = new REST({ version: REST_VERSION }).setToken(config.discordToken);
   const body = commands.map((command) => command.data.toJSON());
-  const registered: unknown = await rest.put(guildCommandsRoute(applicationId, guildId), { body });
-  const count = Array.isArray(registered) ? registered.length : commands.length;
-
+  await rest.put(guildCommandsRoute(applicationId, guildId), { body });
   logger.info(
-    `Registered ${commands.map((command) => `/${command.data.name}`).join(', ')} in guild ${guildId} (${count} command(s)).`,
+    `Registered ${commands.map((command) => `/${command.data.name}`).join(', ')} in guild ${guildId} (${body.length} command(s)).`,
   );
 }
 
