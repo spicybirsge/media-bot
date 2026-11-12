@@ -11,22 +11,17 @@ const SNOWFLAKE = /^\d{17,20}$/;
 /** R2 bucket names: 3-63 chars, lowercase letters/numbers/hyphens, alphanumeric ends. */
 const BUCKET_NAME = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
 
-/**
- * R2's single-request PutObject ceiling (5 GiB). This is a protocol limit,
- * not a product decision.
- */
-export const MAX_UPLOAD_BYTES = 5 * 1024 ** 3;
-
-/**
- * Process-memory guard for buffered downloads, not a product limit. Bodies are
- * buffered before they are signed and uploaded, so an unbounded response could
- * exhaust the heap; 256 MiB is well above Discord's largest attachment cap and
- * can be raised if a bigger link needs archiving.
- */
-export const MAX_BUFFER_BYTES = 256 * 1024 * 1024;
-
-/** Give slow hosts (and large files) room to finish. */
-export const FETCH_TIMEOUT_MS = 5 * 60_000;
+/** Product limit for every attachment, URL download and final social video. */
+export const MAX_UPLOAD_BYTES = 1024 ** 3;
+/** Large files are uploaded in sequential parts, never buffered in full. */
+export const UPLOAD_PART_BYTES = 16 * 1024 ** 2;
+/** Includes source files, separate streams and prepared MP4s for one social post. */
+export const MAX_SOCIAL_TEMP_BYTES = 4 * MAX_UPLOAD_BYTES;
+/** Give 1 GiB downloads, uploads and video processing room to finish. */
+export const FETCH_TIMEOUT_MS = 30 * 60_000;
+export const MEDIA_PROCESS_TIMEOUT_MS = 30 * 60_000;
+/** Leave time to report an error before Discord's 15-minute interaction expiry. */
+export const SLASH_UPLOAD_TIMEOUT_MS = 12 * 60_000;
 
 export interface R2Config {
   readonly accountId: string;
@@ -41,6 +36,7 @@ export interface R2Config {
 export interface AppConfig {
   readonly discordToken: string;
   readonly channelId: string;
+  readonly socialChannelId: string | null;
   readonly ownerId: string;
   readonly guildId: string | null;
   readonly r2: R2Config;
@@ -61,6 +57,7 @@ function loadConfig(): AppConfig {
 
   const discordToken = required('DISCORD_TOKEN');
   const channelId = required('DISCORD_CHANNEL_ID');
+  const socialChannelId = read('DISCORD_SOCIAL_ID') || null;
   const ownerId = required('OWNER_ID');
   const guildId = read('DISCORD_GUILD_ID') || null;
 
@@ -72,12 +69,17 @@ function loadConfig(): AppConfig {
 
   for (const [name, value] of [
     ['DISCORD_CHANNEL_ID', channelId],
+    ['DISCORD_SOCIAL_ID', socialChannelId ?? ''],
     ['OWNER_ID', ownerId],
     ['DISCORD_GUILD_ID', guildId ?? ''],
   ] as const) {
     if (value && !SNOWFLAKE.test(value)) {
       problems.push(`${name} must be a Discord snowflake (17-20 digits)`);
     }
+  }
+
+  if (socialChannelId === channelId) {
+    problems.push('DISCORD_SOCIAL_ID must be different from DISCORD_CHANNEL_ID');
   }
 
   if (bucket && !BUCKET_NAME.test(bucket)) {
@@ -109,6 +111,7 @@ function loadConfig(): AppConfig {
   return {
     discordToken,
     channelId,
+    socialChannelId,
     ownerId,
     guildId,
     r2: {
